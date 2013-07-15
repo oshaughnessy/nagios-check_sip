@@ -33,7 +33,7 @@ Nagios plugin to check the responsiveness of a SIP server
 
 ## Requirements
 
-This script uses [http://www.sipsak.org](sipsak).
+This script uses [sipsak](http://www.sipsak.org).
 
 
 ## To Do
