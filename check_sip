@@ -21,7 +21,7 @@ use POSIX;
 use Getopt::Long qw(:config no_ignore_case);
 use Sys::Hostname;
 
-use lib '/usr/local/libexec/nagios'; 
+use lib '/usr/lib/nagios/plugins';
 use utils qw($TIMEOUT %ERRORS &print_revision &support);
 
 use vars qw($ME $VERSION $Contact $Expires %Flags $Help $Host $Contact_Host
@@ -33,7 +33,7 @@ BEGIN {
   $ME = 'check_sip';
 
   # command to get connection state; 1st %s is for extra args, second is SIP URI
-  @Sipsak_Cmd = qw(sipsak --nagios-code -v);
+  @Sipsak_Cmd = qw(sipsak --nagios-code -v -v);
   $User = '';
   $Password = '';
   $Port = 5060;
@@ -119,13 +119,13 @@ if (!$URI) {
 }
 
 # add -v flags to sipsak according to the verbosity given on the command line
-for (my $v = 0; $v < $Verbose; $v++) {
+for (my $v = 2; $v < $Verbose; $v++) {
     push @Sipsak_Cmd, '-v';
 }
 
-# if the URI contains a username, we're running in REGISTER mode and we
+# if the URI contains a username and password, we're running in REGISTER mode and we
 # need to add some parameters to our sipsak command line
-if ($URI =~ /\@/) {
+if ($URI =~ /\@/ && $Password) {
     $REG_Mode = 1;
 
     push @Sipsak_Cmd, '-U';
@@ -133,7 +133,7 @@ if ($URI =~ /\@/) {
         push @Sipsak_Cmd, '--expires', $Expires;
     }
 
-    if (!$Contact) {
+    if (!$Contact && $User) {
 	$Contact = "sip:$User\@$Contact_Host";
     }
     if (defined($Contact)) {
@@ -157,18 +157,23 @@ my $cmd = join(' ', @Sipsak_Cmd);
 my @out = `$cmd 2>&1`;
 print "output is:\n\n@out\n" if $Verbose;
 chomp @out;
-my ($status) = grep(/^SIP\s/, @out);
+my ($status) = grep(/^SIP\/\d.\d \d\d\d/i, @out);
 chomp $status;
+$status =~ s/\r//;
+
+my ($time) = grep(/\*{2} reply received after/i,@out);
+$time =~ s/^\*\* reply received after /(/g;
+$time =~ s/ \*\*$/)/g;
+chomp $time;
 
 my ($state, $answer);
 if ($status =~ /^SIP(\/[\d.]+ 2\d\d)? OK/i) {
     $state = $ERRORS{OK};
-    $answer = $status;
 }
 else {
     $state = $ERRORS{CRITICAL};
-    $answer = "$status (\"...$out[-2]\")";
 }
+$answer = "$status $time";
 
 print "Searching known error codes... " if $Verbose > 2;
 foreach my $errname (keys %ERRORS) {
